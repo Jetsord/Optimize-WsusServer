@@ -28,7 +28,7 @@ Declines all updates that have been approved and are superseded by other updates
 .PARAMETER CheckConfig
     Validates current WSUS IIS configuration against recommended settings. Helps prevent frequent WSUS/IIS/SQL service crashes and the "RESET SERVER NODE" error.
 
-.PARAMETER OptimizeServer
+.PARAMETER CleanupWsusConsole
     Runs all of Microsoft's built-in WSUS cleanup processes.
 
 .PARAMETER OptimizeDatabase
@@ -396,7 +396,7 @@ function Confirm-Prompt ($prompt) {
     }
 }
 
-function Optimize-WsusUpdates {
+function Cleanup-WsusConsole {
     <#
     .SYNOPSIS
     Runs all built-in WSUS cleanup processes.
@@ -1083,8 +1083,8 @@ switch($true) {
         $wsusIISConfig = Get-WsusIISConfig
         Test-WsusIISConfig $wsusIISConfig $recommendedIISSettings
     }
-    ($OptimizeServer) {
-        Optimize-WsusUpdates
+    ($CleanupWsusConsole) {
+        Cleanup-WsusConsole
     }
     ($OptimizeDatabase) {
         Optimize-WsusDatabase
