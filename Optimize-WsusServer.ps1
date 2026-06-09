@@ -83,13 +83,20 @@ param (
 )
 #----------------------------------------------------------[Declarations]----------------------------------------------------------
 
-# Recommended IIS settings: https://www.reddit.com/r/sysadmin/comments/996xul/getting_2016_updates_to_work_on_wsus/
+# Recommended IIS settings: 
+# Reddit:      https://www.reddit.com/r/sysadmin/comments/996xul/getting_2016_updates_to_work_on_wsus/
+# Microsoft:   https://learn.microsoft.com/en-us/troubleshoot/mem/configmgr/update-management/windows-server-update-services-best-practices
 $recommendedIISSettings = @{
+    StartMode                = 'AlwaysRunning'
     QueueLength              = 25000
-    LoadBalancerCapabilities = 'TcpLevel'
     CpuResetInterval         = 15
+    ProcessIdleTimeout       = 0
+    ProcessMaxProcesses      = 0
+    ProcessPingEnabled       = 'False'
+    LoadBalancerCapabilities = 'TcpLevel'
     RecyclingMemory          = 0
     RecyclingPrivateMemory   = 0
+    RecyclingTime            = 0
     ClientMaxRequestLength   = 204800
     ClientExecutionTimeout   = 7200
 }
@@ -540,10 +547,13 @@ function Get-WsusIISConfig {
     # WSUS Pool Config Root
     $wsusPoolConfig = Get-IISConfigCollectionElement -ConfigCollection $iisApplicationPoolConfig -ConfigAttribute @{"name" = "$iisAppPool" }
 
+    # Start Mode
+    $startMode = Get-IISConfigAttributeValue -ConfigElement $wsusPoolConfig -AttributeName "startMode"
+
     # Queue Length
     $queueLength = Get-IISConfigAttributeValue -ConfigElement $wsusPoolConfig -AttributeName "queueLength"
 
-    #Load Balancer Capabilities
+    # Load Balancer Capabilities
     $wsusPoolFailureConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "failure"
     $loadBalancerCapabilities = Get-IISConfigAttributeValue -ConfigElement $wsusPoolFailureConfig -AttributeName "loadBalancerCapabilities"
 
@@ -551,11 +561,18 @@ function Get-WsusIISConfig {
     $wsusPoolCpuConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "cpu"
     $cpuResetInterval = (Get-IISConfigAttributeValue -ConfigElement $wsusPoolCpuConfig -AttributeName "resetInterval").TotalMinutes
 
+    # Process Idle Timeout + max. Processes + Ping
+    $wsusPoolProcessModelConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "processModel"
+    $processModelIdleTimeout = (Get-IISConfigAttributeValue -ConfigElement $wsusPoolProcessModelConfig -AttributeName "idleTimeout").TotalMinutes
+    $processModelMaxProcesses = Get-IISConfigAttributeValue -ConfigElement $wsusPoolProcessModelConfig -AttributeName "maxProcesses"
+    $processModelPingEnabled = Get-IISConfigAttributeValue -ConfigElement $wsusPoolProcessModelConfig -AttributeName "pingingEnabled"
+
     # Recycling Config Root
     $wsusPoolRecyclingConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "recycling" | Get-IISConfigElement -ChildElementName "periodicRestart"
 
     $recyclingMemory = Get-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "memory"
     $recyclingPrivateMemory = Get-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "privateMemory"
+    $recyclingTime = (Get-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "time").TotalMinutes
 
     $clientWebServiceConfig = Get-WebConfiguration -PSPath $iisPath -Filter "system.web/httpRuntime"
 
@@ -564,11 +581,16 @@ function Get-WsusIISConfig {
 
     # Return hash of IIS settings
     @{
+        StartMode                = $startMode
         QueueLength              = $queueLength
         LoadBalancerCapabilities = $loadBalancerCapabilities
         CpuResetInterval         = $cpuResetInterval
+        ProcessIdleTimeout       = $processModelIdleTimeout
+        ProcessMaxProcesses      = $processModelMaxProcesses
+        ProcessPingEnabled       = $processModelPingEnabled
         RecyclingMemory          = $recyclingMemory
         RecyclingPrivateMemory   = $recyclingPrivateMemory
+        RecyclingTime            = $recyclingTime
         ClientMaxRequestLength   = $clientMaxRequestLength
         ClientExecutionTimeout   = $clientExecutionTimeout
     }
@@ -653,8 +675,13 @@ function Update-WsusIISConfig ($settingKey, $recommendedValue) {
     $wsusPoolRecyclingConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "recycling" | Get-IISConfigElement -ChildElementName "periodicRestart"
 
     switch ($settingKey) {
+        'StartMode' {
+            # General\Start Mode
+            Set-IISConfigAttributeValue -ConfigElement $wsusPoolConfig -AttributeName "startMode" -AttributeValue $recommendedValue
+            Break
+        }
         'QueueLength' {
-            # Queue Length
+            # General\Queue Length
             Set-IISConfigAttributeValue -ConfigElement $wsusPoolConfig -AttributeName "queueLength" -AttributeValue $recommendedValue
             Break
         }
@@ -667,17 +694,42 @@ function Update-WsusIISConfig ($settingKey, $recommendedValue) {
             Break
         }
         'CpuResetInterval' {
-            # CPU Reset Interval
+            # CPU\ResetInterval
             $wsusPoolCpuConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "cpu"
             Set-IISConfigAttributeValue -ConfigElement $wsusPoolCpuConfig -AttributeName "resetInterval" -AttributeValue ([timespan]::FromMinutes($recommendedValue))
             Break
         }
+        'ProcessIdleTimeout' {
+            # Process\IdleTimeout
+            $wsusPoolCpuConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "processModel"
+            Set-IISConfigAttributeValue -ConfigElement $wsusPoolCpuConfig -AttributeName "idleTimeout" -AttributeValue ([timespan]::FromMinutes($recommendedValue))
+            Break
+        }
+        'ProcessMaxProcesses' {
+            # Process\maxProcesses
+            $wsusPoolCpuConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "processModel"
+            Set-IISConfigAttributeValue -ConfigElement $wsusPoolCpuConfig -AttributeName "maxProcesses" -AttributeValue $recommendedValue
+            Break
+        }
+        'ProcessPingEnabled' {
+            # Process\PingingEnabled
+            $wsusPoolCpuConfig = Get-IISConfigElement -ConfigElement $wsusPoolConfig -ChildElementName "processModel"
+            Set-IISConfigAttributeValue -ConfigElement $wsusPoolCpuConfig -AttributeName "pingingEnabled" -AttributeValue $recommendedValue
+            Break
+        }  
         'RecyclingMemory' {
+            # Recycling\Memmory
             Set-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "memory" -AttributeValue $recommendedValue
             Break
         }
         'RecyclingPrivateMemory' {
+            # Recycling\PrivateMemmory
             Set-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "privateMemory" -AttributeValue $recommendedValue
+            Break
+        }
+        'RecyclingTime' {
+            # Recycling\Time
+            Set-IISConfigAttributeValue -ConfigElement $wsusPoolRecyclingConfig -AttributeName "time" -AttributeValue ([timespan]::FromMinutes($recommendedValue))
             Break
         }
         'ClientMaxRequestLength' {
