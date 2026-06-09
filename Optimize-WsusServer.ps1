@@ -353,6 +353,23 @@ PRINT 'Done updating statistics.' + convert(nvarchar, getdate(), 121)
 GO
 "@
 
+<#
+    Increase database timeout
+
+    References: 
+    https://www.windowspro.de/wolfgang-sommergut/wsus-bereinigung-bricht-ab-timeout-fuer-datenbank-iis-erhoehen
+    https://4sysops.com/archives/wsus-cleanup-aborting-increase-timeout-for-database-and-iis/
+    https://www.ugg.li/wsus-4-performance-optimieren-durch-datenbank-reindexierung-loeschen-und-manuelles-bearbeiten/
+#>
+$wsusDBqueryTimeout = @"
+USE SUSDB;
+GO
+EXEC sp_configure "remote query timeout", 0 ;
+GO
+RECONFIGURE ;
+GO
+"@
+
 #-----------------------------------------------------------[Functions]------------------------------------------------------------
 
 function Confirm-Prompt ($prompt) {
@@ -441,6 +458,10 @@ function Optimize-WsusDatabase {
 
     # Setting query timeout value because both of these scripts are prone to timeout
     # https://devblogs.microsoft.com/scripting/10-tips-for-the-sql-server-powershell-scripter/
+
+    Write-Host "Increase database timeout"
+    #Set the new database timeout
+    Invoke-Sqlcmd -query $wsusDBqueryTimeout -ServerInstance $serverInstance -QueryTimeout 120 -Encrypt Optional -Verbose
 
     Write-Host "Creating custom indexes in WSUS index if they don't already exist. This will speed up future database optimizations."
     #Create custom indexes in the database if they don't already exist
