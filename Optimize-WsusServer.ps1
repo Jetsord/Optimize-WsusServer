@@ -153,7 +153,7 @@ $unneededUpdatesbyTitle = @(
 <#
 REFERENCES
     The complete guide to Microsoft WSUS and Configuration Manager SUP maintenance
-    https://support.microsoft.com/en-us/help/4490644/complete-guide-to-microsoft-wsus-and-configuration-manager-sup-maint
+    https://learn.microsoft.com/en-us/troubleshoot/mem/configmgr/update-management/wsus-maintenance-guide#create-custom-indexes
 
     Invoke-WsusServerCleanup
     https://docs.microsoft.com/en-us/powershell/module/wsus/Invoke-WsusServerCleanup?view=win10-ps
@@ -216,7 +216,7 @@ GO
     to re-index and defragment WSUS databases. It should not be used on WSUS 2.0 databases.This script contributed by the
     Microsoft WSUS team."
 
-    Reference: https://support.microsoft.com/en-us/help/4490644/complete-guide-to-microsoft-wsus-and-configuration-manager-sup-maint
+    Reference: https://learn.microsoft.com/en-us/troubleshoot/mem/configmgr/update-management/reindex-the-wsus-database
 #>
 $wsusDBMaintenanceSQLQuery = @"
 /******************************************************************************
@@ -437,11 +437,11 @@ function Optimize-WsusDatabase {
 
     Write-Host "Creating custom indexes in WSUS index if they don't already exist. This will speed up future database optimizations."
     #Create custom indexes in the database if they don't already exist
-    Invoke-Sqlcmd -query $createCustomIndexesSQLQuery -ServerInstance $serverInstance -QueryTimeout 120
+    Invoke-Sqlcmd -query $createCustomIndexesSQLQuery -ServerInstance $serverInstance -QueryTimeout 120 -Encrypt Optional -Verbose
 
     Write-Host "Running WSUS SQL database maintenence script. This can take an extremely long time on the first run."
     #Run the WSUS SQL database maintenance script
-    Invoke-Sqlcmd -query $wsusDBMaintenanceSQLQuery -ServerInstance $serverInstance -QueryTimeout 40000
+    Invoke-Sqlcmd -query $wsusDBMaintenanceSQLQuery -ServerInstance $serverInstance -QueryTimeout 40000 -Encrypt Optional -Verbose
 }
 
 function New-WsusMaintainenceTask($interval) {
